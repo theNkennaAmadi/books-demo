@@ -17,7 +17,12 @@ export class Texture {
         this.bookInstances = [];
         this.clickableObjects = [];
 
-
+        this.finalPositions = [
+            { x: -1.5, y: -0.2, z: 0.25 },
+            { x: -0.5, y: -0.2, z: 0.25 },
+            { x: 0.5, y: -0.2, z: 0.25 },
+            { x: 1.5, y: -0.2, z: 0.25 },
+        ];
 
         this.books = [
             { name: "The How", url: "/books/the-how-normal.glb" },
@@ -32,9 +37,9 @@ export class Texture {
         this.lastCalculatedPositions = [];
 
 
-        // 90% for full open, 10% for hover
+        // 90% for full open, 20% for hover
         this.clickPlayPercentage = 0.9;
-        this.hoverPlayPercentage = 0.1;
+        this.hoverPlayPercentage = 0.2;
 
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -61,23 +66,7 @@ export class Texture {
             height: window.innerHeight,
         };
         this.aspectRatio = this.sizes.width / this.sizes.height;
-
-        const baseWidth = 1280;
-        // The factor should not exceed 1.0 (so if user gets a very large screen, the gap remains at intended “maximum”).
-        this.bookSpacingScale = Math.min(1, Math.max(this.sizes.width / baseWidth, 0.6));
-        console.log(this.bookSpacingScale);
-
-        // AFTER you've called this.setUpSizes() and established bookSpacingScale
-
-        this.finalPositions = [
-            { x: -1.5 * this.bookSpacingScale, y: -0.2, z: 0.25 },
-            { x: -0.5 * this.bookSpacingScale, y: -0.2, z: 0.25 },
-            { x:  0.5 * this.bookSpacingScale, y: -0.2, z: 0.25 },
-            { x:  1.5 * this.bookSpacingScale, y: -0.2, z: 0.25 },
-        ];
-
     }
-
 
     loadBooks() {
         this.gltfLoader = new GLTFLoader();
@@ -88,7 +77,6 @@ export class Texture {
             this.gltfLoader.load(
                 bookData.url,
                 (gltf) => {
-                    console.log(gltf)
                     const bookScene = gltf.scene;
                     bookScene.scale.set(2, 2, 2);
 
@@ -367,42 +355,13 @@ export class Texture {
         return this.bookInstances.some((b) => b?.isOpen);
     }
 
-    getXValue() {
-        if(window.innerWidth < 1280){
-           return  this.finalXValue =  Math.min(1, this.sizes.width / 1280) - (Math.min(Math.max(window.innerWidth/1000,0.4), 0.55));
-        }else{
-          return  this.finalXValue  = 0.35
-        }
-    }
-
     updateBookPositions(progress) {
         const ellipseConfigs = [
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 1.3 * this.bookSpacingScale,
-                radiusY: 0.7,
-            },
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 1.1 * this.bookSpacingScale,
-                radiusY: 0.5,
-            },
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 0.9 * this.bookSpacingScale,
-                radiusY: 0.4,
-            },
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 0.7 * this.bookSpacingScale,
-                radiusY: 0.3,
-            },
+            { centerX: 0, centerY: 0, radiusX: 1.3, radiusY: 0.7 },
+            { centerX: 0, centerY: 0, radiusX: 1.1, radiusY: 0.5 },
+            { centerX: 0, centerY: 0, radiusX: 0.9, radiusY: 0.4 },
+            { centerX: 0, centerY: 0, radiusX: 0.7, radiusY: 0.3 },
         ];
-
 
         const angleConfigs = [
             {
@@ -427,6 +386,7 @@ export class Texture {
             },
         ];
 
+        this.camera.position.x = 1.4 - progress;
 
         this.bookInstances.forEach((book, i) => {
             if (!book) return;
@@ -438,12 +398,6 @@ export class Texture {
 
             const x = centerX + radiusX * Math.cos(angleX);
             const y = centerY + radiusY * Math.sin(angleY);
-
-            if (i === 3) {
-
-                this.getXValue()
-                this.camera.position.x = this.finalXValue
-            }
 
             // If not open or actively clicking, let the ellipse drive the position
             if (!book.isOpen && !book.isClickPlaying) {
@@ -526,32 +480,11 @@ export class Texture {
     // Extract the ellipse calculation logic to a separate method so we can reuse it
     calculateBookPositionsForProgress(progress) {
         const ellipseConfigs = [
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 1.3 * this.bookSpacingScale,
-                radiusY: 0.7,
-            },
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 1.1 * this.bookSpacingScale,
-                radiusY: 0.5,
-            },
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 0.9 * this.bookSpacingScale,
-                radiusY: 0.4,
-            },
-            {
-                centerX: 0,
-                centerY: 0,
-                radiusX: 0.7 * this.bookSpacingScale,
-                radiusY: 0.3,
-            },
+            { centerX: 0, centerY: 0, radiusX: 1.3, radiusY: 0.7 },
+            { centerX: 0, centerY: 0, radiusX: 1.1, radiusY: 0.5 },
+            { centerX: 0, centerY: 0, radiusX: 0.9, radiusY: 0.4 },
+            { centerX: 0, centerY: 0, radiusX: 0.7, radiusY: 0.3 },
         ];
-
 
         const angleConfigs = [
             {
@@ -645,9 +578,9 @@ export class Texture {
                 book.scene.position,
                 {
                     duration: 2,
-                    x: ()=> this.getXValue(),
+                    x: 0.4,
                     y: 0,
-                    z: ()=> 0.55 * (Math.min(window.innerWidth/1000, 1)),
+                    z: 0.5,
                 },
                 "<"
             );
