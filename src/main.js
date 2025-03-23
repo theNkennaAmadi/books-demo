@@ -31,15 +31,21 @@ export class Texture {
             { name: "The Catch", url: "/books/the-catch-normal.glb" },
         ];
 
-        // 90% for full open, 20% for hover, etc.
+        this.scrollTrigger = null;
+        this.isClosingFromScroll = false;
+        this.bookClosePromise = null;
+        this.lastCalculatedPositions = [];
+
+
+        // 90% for full open, 20% for hover
         this.clickPlayPercentage = 0.9;
         this.hoverPlayPercentage = 0.2;
 
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
-        // Track hovered book index
         this.currentHoveredIndex = -1;
+        this.canInteract = false;
 
         this.init();
     }
@@ -92,7 +98,6 @@ export class Texture {
                         isClickPlaying: false,
                         isHoverPlaying: false,
 
-                        // Store original transform
                         originalPosition: { x, y, z },
                         originalRotation: {
                             x: bookScene.rotation.x,
@@ -100,23 +105,20 @@ export class Texture {
                             z: bookScene.rotation.z,
                         },
 
-                        openTimeline: null, // We'll build this once the user clicks
+                        openTimeline: null,
                         closeTimeline: null,
                     };
 
                     this.scene.add(bookScene);
                     this.bookInstances[index] = bookInstance;
 
+                    // Make each Mesh in the GLTF clickable
                     bookScene.traverse((child) => {
                         if (child.isMesh) {
                             child.userData.bookIndex = index;
                             child.userData.bookName = bookData.name;
                             this.clickableObjects.push(child);
                         }
-                    });
-
-                    mixer.addEventListener("finished", () => {
-                        // We'll rely on checkAnimationProgress for finishing logic
                     });
 
                     if (gltf.animations?.length) {
@@ -184,13 +186,13 @@ export class Texture {
             .appendChild(this.renderer.domElement);
     }
 
+    // MAIN SCROLLTRIGGER + AUTO-CLOSE LOGIC
+    // Update the onUpdate handler in animateBookEntry to include smooth scroll transition
     animateBookEntry() {
         this.camera.position.x = 1;
-
-        // Use a variable so we can check direction if we want
         let lastProgress = 0;
 
-        ScrollTrigger.create({
+        this.scrollTrigger = ScrollTrigger.create({
             trigger: ".pinned-section",
             start: "top top",
             end: "+=300%",
@@ -198,32 +200,159 @@ export class Texture {
             scrub: 1,
             markers: true,
 
-            // If you want to auto-close on reversing scroll,
-            // use onUpdate below. If you'd rather wait until the
-            // user scrolls all the way back, use onLeaveBack instead.
-            /*
-            onUpdate: (self) => {
-              // Example of auto close if direction < 0
-              if (self.progress < lastProgress) {
-                // User is scrolling up
-                this.closeAllOpenBooks();
-              }
-              lastProgress = self.progress;
-              // Keep your existing ellipse code:
-              this.updateBookPositions(self.progress);
-            },
-            */
-
             onLeaveBack: () => {
-                // Called once the user scrolls all the way to the top
+                // If the user fully scrolls back to top, close all
                 this.closeAllOpenBooks();
             },
 
             onUpdate: (self) => {
-                // Keep your existing ellipse code:
-                this.updateBookPositions(self.progress);
+                // If user scrolls UP (progress < lastProgress) and any book is open
+                if (self.progress < lastProgress && this.isAnyBookOpen() && !this.isClosingFromScroll) {
+                    // Store the target progress we want to animate to
+                    const targetProgress = self.progress;
+
+                    // Pause the ScrollTrigger temporarily
+                    self.disable();
+
+                    // Set flag to prevent recursive calls
+                    this.isClosingFromScroll = true;
+
+                    // Close all books with a promise
+                    this.closeAllOpenBooksWithPromise().then(() => {
+                        // After closing books, we want to smoothly transition
+                        // to the appropriate scroll position
+                        self.enable();
+
+                        // Calculate where each book should be in the elliptical path
+                        // based on the current scroll progress
+                        const targetBookPositions = this.calculateBookPositionsForProgress(targetProgress);
+
+                        // First, animate the books to their correct positions
+                        const positionTransition = gsap.timeline({
+                            onComplete: () => {
+                                // Now smoothly animate the scroll position over 2 seconds (3x slower)
+                                // Store the current scroll position
+                                const startScrollY = window.scrollY;
+                                // Calculate the scroll position that corresponds to the target progress
+                                // We need to convert ScrollTrigger progress to actual scroll position
+                                const totalScrollDistance = self.end - self.start;
+                                const endScrollY = self.start + (totalScrollDistance * targetProgress);
+                                const scrollDistance = endScrollY - startScrollY;
+
+                                // Create a manual scroll animation
+                                gsap.to({progress: 0}, {
+                                    progress: 1,
+                                    duration: 2, // 3x slower than typical
+                                    ease: "power2.inOut",
+                                    onUpdate: function() {
+                                        // Calculate the current scroll position based on progress
+                                        const currentY = startScrollY + (scrollDistance * this.progress);
+                                        window.scrollTo(0, currentY);
+                                    },
+                                    onComplete: () => {
+                                        // Make sure we end exactly at the target position
+                                        window.scrollTo(0, endScrollY);
+                                        // Reset the flag after all animations are complete
+                                        this.isClosingFromScroll = false;
+                                    }
+                                });
+                            }
+                        });
+
+                        // Animate each book to its calculated position
+                        this.bookInstances.forEach((book, index) => {
+                            if (!book) return;
+
+                            const targetPos = targetBookPositions[index];
+                            positionTransition.to(book.scene.position, {
+                                duration: 0.75, // Slightly longer for smoother transition
+                                x: targetPos.x,
+                                y: targetPos.y,
+                                z: book.scene.position.z,
+                                ease: "power2.out"
+                            }, 0);
+
+                            // Also animate rotation
+                            const targetRotation = {
+                                x: targetProgress * degToRad(90),
+                                y: 0,
+                                z: targetProgress * degToRad(-28 - index * 20)
+                            };
+
+                            positionTransition.to(book.scene.rotation, {
+                                duration: 0.75,
+                                x: targetRotation.x,
+                                y: targetRotation.y,
+                                z: targetRotation.z,
+                                ease: "power2.out"
+                            }, 0);
+                        });
+                    });
+                }
+
+                // Only update positions if we're not in the middle of a scroll-triggered close
+                if (!this.isClosingFromScroll) {
+                    // Update book positions based on scroll
+                    this.updateBookPositions(self.progress);
+
+                    // Only allow interaction if fully scrolled to the bottom
+                    this.canInteract = (self.progress === 1);
+                }
+
+                lastProgress = self.progress;
             },
         });
+    }
+
+// New method that returns a Promise for when all books are closed
+    closeAllOpenBooksWithPromise() {
+        // If we already have a promise in progress, return it
+        if (this.bookClosePromise) return this.bookClosePromise;
+
+        // If no books are open, resolve immediately
+        if (!this.isAnyBookOpen()) {
+            return Promise.resolve();
+        }
+
+        // Create a new promise
+        this.bookClosePromise = new Promise((resolve) => {
+            // Keep track of which books need to close
+            const openBookIndices = this.bookInstances
+                .filter(book => book && book.isOpen)
+                .map(book => book.index);
+
+            if (openBookIndices.length === 0) {
+                this.bookClosePromise = null;
+                resolve();
+                return;
+            }
+
+            // Track how many have finished closing
+            let closedCount = 0;
+
+            // Set up a completion check function
+            const checkAllClosed = () => {
+                closedCount++;
+                if (closedCount >= openBookIndices.length) {
+                    this.bookClosePromise = null;
+                    resolve();
+                }
+            };
+
+            // Close each book with a callback
+            openBookIndices.forEach(index => {
+                this.toggleBookAnimationWithCallback(index, checkAllClosed);
+            });
+        });
+
+        return this.bookClosePromise;
+    }
+
+
+
+    // Helper: check if any book is currently open
+    isAnyBookOpen() {
+        return this.bookInstances.some((b) => b?.isOpen);
     }
 
     updateBookPositions(progress) {
@@ -259,7 +388,6 @@ export class Texture {
 
         this.camera.position.x = 1.4 - progress;
 
-        // Move each book in an ellipse
         this.bookInstances.forEach((book, i) => {
             if (!book) return;
 
@@ -271,9 +399,7 @@ export class Texture {
             const x = centerX + radiusX * Math.cos(angleX);
             const y = centerY + radiusY * Math.sin(angleY);
 
-            // Only move if it's closed. If it's open, we presumably want
-            // the timeline’s position to dominate. But you can remove this
-            // condition if you DO want the scroll to override the open state:
+            // If not open or actively clicking, let the ellipse drive the position
             if (!book.isOpen && !book.isClickPlaying) {
                 book.scene.position.set(x, y, book.scene.position.z);
                 book.scene.rotation.set(
@@ -286,11 +412,7 @@ export class Texture {
     }
 
     closeAllOpenBooks() {
-        this.bookInstances.forEach((book) => {
-            if (book && book.isOpen) {
-                this.toggleBookAnimation(book.index);
-            }
-        });
+        return this.closeAllOpenBooksWithPromise();
     }
 
     animate() {
@@ -313,7 +435,8 @@ export class Texture {
 
             // If it's a click animation:
             if (book.isClickPlaying) {
-                const forwardLimit = originalDuration * this.clickPlayPercentage; // 90%
+                const forwardLimit =
+                    originalDuration * this.clickPlayPercentage; // 90%
                 const reverseLimit = 0;
 
                 // Opening forward
@@ -334,7 +457,8 @@ export class Texture {
 
             // If it's a hover animation:
             if (book.isHoverPlaying) {
-                const hoverForwardLimit = originalDuration * this.hoverPlayPercentage; // 20%
+                const hoverForwardLimit =
+                    originalDuration * this.hoverPlayPercentage; // 20%
                 const hoverReverseLimit = 0;
 
                 // Hover forward (0->20%)
@@ -353,15 +477,72 @@ export class Texture {
         });
     }
 
-    /**
-     * The main click handler: open or close the book, *and* run a GSAP timeline
-     * to move the clicked book to the center and push others off-screen if opening.
-     */
-    toggleBookAnimation(bookIndex) {
-        const book = this.bookInstances[bookIndex];
-        if (!book || !book.animationActions.length) return;
+    // Extract the ellipse calculation logic to a separate method so we can reuse it
+    calculateBookPositionsForProgress(progress) {
+        const ellipseConfigs = [
+            { centerX: 0, centerY: 0, radiusX: 1.3, radiusY: 0.7 },
+            { centerX: 0, centerY: 0, radiusX: 1.1, radiusY: 0.5 },
+            { centerX: 0, centerY: 0, radiusX: 0.9, radiusY: 0.4 },
+            { centerX: 0, centerY: 0, radiusX: 0.7, radiusY: 0.3 },
+        ];
 
-        // Cancel any hover animation in progress
+        const angleConfigs = [
+            {
+                start: -Math.PI * 1.0,
+                endX: -Math.PI * 2.2,
+                endY: -Math.PI * 2.14,
+            },
+            {
+                start: -Math.PI * 1.2,
+                endX: -Math.PI * 2.35,
+                endY: -Math.PI * 2.2,
+            },
+            {
+                start: -Math.PI * 1.4,
+                endX: -Math.PI * 2.5,
+                endY: -Math.PI * 2.265,
+            },
+            {
+                start: -Math.PI * 1.6,
+                endX: -Math.PI * 2.8,
+                endY: -Math.PI * 2.45,
+            },
+        ];
+
+        const positions = [];
+
+        // Calculate position for each book
+        for (let i = 0; i < this.books.length; i++) {
+            const { start, endX, endY } = angleConfigs[i];
+            const { centerX, centerY, radiusX, radiusY } = ellipseConfigs[i];
+            const angleX = start + (endX - start) * progress;
+            const angleY = start + (endY - start) * progress;
+
+            const x = centerX + radiusX * Math.cos(angleX);
+            const y = centerY + radiusY * Math.sin(angleY);
+
+            positions.push({ x, y });
+        }
+
+        // Store these positions for potential later use
+        this.lastCalculatedPositions = positions;
+
+        return positions;
+    }
+
+
+
+    /**
+     * The main open/close logic
+     */
+    toggleBookAnimationWithCallback(bookIndex, callback) {
+        const book = this.bookInstances[bookIndex];
+        if (!book || !book.animationActions.length) {
+            if (callback) callback();
+            return;
+        }
+
+        // Cancel any hover in progress
         if (book.isHoverPlaying) {
             book.isHoverPlaying = false;
             book.animationActions.forEach((animObj) => {
@@ -369,35 +550,31 @@ export class Texture {
             });
         }
 
-        // If we haven't created the timeline yet, create it once.
-        // We add onComplete and onReverseComplete to ensure it “snaps”
-        // to fully open or fully closed states at the end.
+        // Build the "open" timeline once
         if (!book.openTimeline) {
+            // Your existing openTimeline creation code
             book.openTimeline = gsap.timeline({
                 onComplete: () => {
-                    // Snap to the end so reversing is consistent
                     book.openTimeline.pause();
                     book.openTimeline.progress(1);
                 },
                 onReverseComplete: () => {
-                    // Snap to the start
                     book.openTimeline.pause();
                     book.openTimeline.progress(0);
+                    if (callback) callback();
                 },
             });
 
-            // Build the "open" animation
-            // 1) Rotate book z to 0
+            // Add your existing animations to the timeline
             book.openTimeline.to(
                 book.scene.rotation,
                 {
                     duration: 0.5,
                     z: 0,
                 },
-                0,
+                0
             );
 
-            // 2) Move the clicked book to center
             book.openTimeline.to(
                 book.scene.position,
                 {
@@ -406,10 +583,9 @@ export class Texture {
                     y: 0,
                     z: 0.5,
                 },
-                "<",
+                "<"
             );
 
-            // 3) Move other books off-screen
             this.bookInstances.forEach((other, i) => {
                 if (!other || i === bookIndex) return;
                 const offscreenX = i < bookIndex ? 5 : -5;
@@ -419,15 +595,14 @@ export class Texture {
                         duration: 3,
                         x: offscreenX,
                     },
-                    0,
+                    0
                 );
             });
 
-            // Initially pause at start
             book.openTimeline.pause(0);
         }
 
-        // Are we opening or closing?
+        // Open or close?
         if (!book.isOpen) {
             // Opening => run forward page-turn
             book.isClickPlaying = true;
@@ -440,7 +615,6 @@ export class Texture {
 
             // Make sure timeline is at start, then play forward
             book.openTimeline.timeScale(1);
-            // Jump to 0 (just in case it’s partially done)
             book.openTimeline.progress(0);
             book.openTimeline.play();
         } else {
@@ -453,15 +627,38 @@ export class Texture {
                 action.play();
             });
 
+            // Modify the existing animation completion check to use the callback
+            if (book.animationActions.length > 0) {
+                const firstAction = book.animationActions[0].action;
+                const originalCheckAnimationProgress = this.checkAnimationProgress.bind(this);
+
+                // Replace with custom check that includes callback
+                this.checkAnimationProgress = function(checkBook) {
+                    originalCheckAnimationProgress(checkBook);
+
+                    // If this is our book and it's done closing
+                    if (checkBook === book && !book.isClickPlaying && !book.isOpen) {
+                        // Restore original function
+                        this.checkAnimationProgress = originalCheckAnimationProgress;
+
+                        // Call the callback
+                        if (callback) callback();
+                    }
+                };
+            }
+
             // Reverse the timeline
             book.openTimeline.timeScale(2); // speed up the reverse
-            // Ensure we start from the fully open end
             book.openTimeline.progress(1);
             book.openTimeline.reverse();
         }
     }
 
+
+    // Only allow clicks if we can interact
     onCanvasClick(event) {
+        if (!this.canInteract || this.isClosingFromScroll) return;
+
         this.mouse.x = (event.clientX / this.sizes.width) * 2 - 1;
         this.mouse.y = -((event.clientY / this.sizes.height) * 2 - 1);
 
@@ -472,7 +669,19 @@ export class Texture {
             const { bookIndex, bookName } = intersects[0].object.userData;
             if (bookIndex !== undefined) {
                 console.log(`Clicked Book ${bookIndex} (${bookName})`);
-                this.toggleBookAnimation(bookIndex);
+
+                // Use the new method, but without a callback for regular clicks
+                this.toggleBookAnimationWithCallback(bookIndex, null);
+
+                // If we're opening a book and other books are open, close them
+                const book = this.bookInstances[bookIndex];
+                if (book && !book.isOpen) {
+                    this.bookInstances.forEach((otherBook, i) => {
+                        if (otherBook && i !== bookIndex && otherBook.isOpen) {
+                            this.toggleBookAnimationWithCallback(i, null);
+                        }
+                    });
+                }
             }
         }
     }
@@ -503,6 +712,8 @@ export class Texture {
     }
 
     onCanvasMouseMove(event) {
+        if (!this.canInteract) return;
+
         this.mouse.x = (event.clientX / this.sizes.width) * 2 - 1;
         this.mouse.y = -((event.clientY / this.sizes.height) * 2 - 1);
 
