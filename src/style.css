@@ -39,3 +39,20 @@ canvas {
   top: 0;
   left: 0;
 }
+
+.scrollbar-wrapper{
+    position: fixed;
+    bottom: 4vh;
+    left: 40vw;
+    width: 20vw;
+    height: 6px;
+    border: 1px solid black;
+    z-index: 100;
+     margin:auto 0;
+}
+.scrollbar{
+  width: 25%;
+    height: 100%;
+  background-color: red;
+  cursor: grab;
+}

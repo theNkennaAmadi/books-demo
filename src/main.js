@@ -4,8 +4,9 @@ import { OrbitControls } from "three/addons";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {Draggable} from "gsap/draggable";
 
-gsap.registerPlugin(ScrollTrigger);
+gsap.registerPlugin(ScrollTrigger, Draggable);
 
 const degToRad = (deg) => deg * (Math.PI / 180);
 
@@ -17,7 +18,9 @@ export class Texture {
         this.bookInstances = [];
         this.clickableObjects = [];
 
-
+        // Create a group to hold all books
+        this.booksGroup = new THREE.Group();
+        this.scene.add(this.booksGroup);
 
         this.books = [
             { name: "The How", url: "/books/the-how-normal.glb" },
@@ -62,13 +65,12 @@ export class Texture {
         };
         this.aspectRatio = this.sizes.width / this.sizes.height;
 
-        const baseWidth = 1280;
+        this.baseWidth = 1280;
         // The factor should not exceed 1.0 (so if user gets a very large screen, the gap remains at intended “maximum”).
-        this.bookSpacingScale = Math.min(1, Math.max(this.sizes.width / baseWidth, 0.6));
+        this.bookSpacingScale = Math.min(1, Math.max(this.sizes.width / this.baseWidth, 0.6));
         console.log(this.bookSpacingScale);
 
-        // AFTER you've called this.setUpSizes() and established bookSpacingScale
-
+        // AFTER we've called this.setUpSizes() and established bookSpacingScale
         this.finalPositions = [
             { x: -1.5 * this.bookSpacingScale, y: -0.2, z: 0.25 },
             { x: -0.5 * this.bookSpacingScale, y: -0.2, z: 0.25 },
@@ -121,7 +123,8 @@ export class Texture {
                         closeTimeline: null,
                     };
 
-                    this.scene.add(bookScene);
+                    // Add each book to the booksGroup instead of directly to scene
+                    this.booksGroup.add(bookScene);
                     this.bookInstances[index] = bookInstance;
 
                     // Make each Mesh in the GLTF clickable
@@ -167,6 +170,43 @@ export class Texture {
         this.addHoverListeners();
         this.animate();
         this.animateBookEntry();
+
+        this.setUpScrollbar();
+    }
+
+    setUpScrollbar() {
+        // Query the elements
+        const scrollbarWrapper = document.querySelector(".scrollbar-wrapper");
+        const scrollbar = document.querySelector(".scrollbar");
+
+        // If window is wide enough, hide the scrollbar entirely
+        if (window.innerWidth >= 990) {
+            scrollbarWrapper.style.display = "none";
+            return;
+        } else {
+            scrollbarWrapper.style.display = "block";
+        }
+
+        // Calculate bounding box of our booksGroup
+        // to figure out how wide the books are in 3D space
+        const box = new THREE.Box3().setFromObject(this.booksGroup);
+        const groupWidth = box.max.x - box.min.x;
+         const distance = this.bookInstances[3].scene.position.distanceTo(this.bookInstances[0].scene.position);
+        console.log({distance, groupWidth});
+        const target = this.booksGroup
+
+        Draggable.create("#scrollbar", {
+            type: "x",
+            bounds: document.querySelector('.scrollbar-wrapper'),
+            inertia: true,
+            onDrag: function () {
+                const scrollFraction = this.x / (scrollbarWrapper.offsetWidth - this.target.offsetWidth);
+                const scrollDistance = groupWidth * 0.75
+                const targetX = -scrollFraction * scrollDistance;
+                console.log({scrollFraction, scrollDistance, targetX});
+                target.position.x = targetX;
+            }
+        });
     }
 
     initLights() {
@@ -201,8 +241,9 @@ export class Texture {
     // MAIN SCROLLTRIGGER + AUTO-CLOSE LOGIC
     // Update the onUpdate handler in animateBookEntry to include smooth scroll transition
     animateBookEntry() {
-        this.camera.position.x = 1;
         let lastProgress = 0;
+        console.log(this.bookInstances[0])
+
 
         this.scrollTrigger = ScrollTrigger.create({
             trigger: ".pinned-section",
@@ -368,8 +409,8 @@ export class Texture {
     }
 
     getXValue() {
-        if(window.innerWidth < 1280){
-           return  this.finalXValue =  Math.min(1, this.sizes.width / 1280) - (Math.min(Math.max(window.innerWidth/1000,0.4), 0.55));
+        if(window.innerWidth < this.baseWidth){
+           return  this.finalXValue =  Math.min(1, this.sizes.width / this.baseWidth) - (Math.min(Math.max(window.innerWidth/1000,0.4), 0.55));
         }else{
           return  this.finalXValue  = 0.35
         }
@@ -645,7 +686,7 @@ export class Texture {
                 book.scene.position,
                 {
                     duration: 2,
-                    x: ()=> this.getXValue(),
+                    x: ()=> this.getXValue() - this.booksGroup.position.x,
                     y: 0,
                     z: ()=> 0.55 * (Math.min(window.innerWidth/1000, 1)),
                 },
@@ -820,15 +861,23 @@ export class Texture {
 
     addResizeListener() {
         window.addEventListener("resize", () => {
-            this.sizes.width = window.innerWidth;
-            this.sizes.height = window.innerHeight;
-            this.aspectRatio = this.sizes.width / this.sizes.height;
+            // Re-run your custom size logic so bookSpacingScale gets updated
+            this.setUpSizes();
 
             this.camera.aspect = this.aspectRatio;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(this.sizes.width, this.sizes.height);
+
+            // If you use ScrollTrigger, refresh it after resizing
+            // Recalculate book positions using the current scroll progress
+            // (so they visually jump to the correct ellipse position)
+            if (this.scrollTrigger) {
+                this.scrollTrigger.refresh();
+                this.updateBookPositions(this.scrollTrigger.progress);
+            }
         });
     }
+
 
     addClickListener() {
         this.renderer.domElement.addEventListener("click", (event) =>
