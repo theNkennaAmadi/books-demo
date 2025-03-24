@@ -98,7 +98,7 @@ export class Texture {
         // them framed. For instance, to center the leftmost book:
         const bookWidth = bbox.max.x - bbox.min.x;
         console.log(bookWidth);
-        const desiredOffset = window.innerWidth/160 * bookWidth; // or tweak as needed
+        const desiredOffset = window.innerWidth/140 * bookWidth; // or tweak as needed
 
         //console.log(this.renderer.domElement.clientWidth);
         // Shift the camera so the leftmost book is in view.
