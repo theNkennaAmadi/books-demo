@@ -710,7 +710,7 @@ export class Texture {
                         return viewportCenter - this.booksGroup.position.x;
                     },
                     y: 0,
-                    z: ()=> 0.55 * (Math.min(window.innerWidth/600, 1)),
+                    z: ()=> 0.55 * (Math.min(window.innerWidth/1400, 1)),
                 },
                 "<"
             );
