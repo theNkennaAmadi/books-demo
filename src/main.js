@@ -1,10 +1,9 @@
 import "./style.css";
 import * as THREE from "three";
-import { OrbitControls } from "three/addons";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import {Draggable} from "gsap/draggable";
+import {Draggable} from "gsap/Draggable";
 
 gsap.registerPlugin(ScrollTrigger, Draggable);
 
@@ -177,22 +176,12 @@ export class Texture {
     setUpScrollbar() {
         // Query the elements
         const scrollbarWrapper = document.querySelector(".scrollbar-wrapper");
-        const scrollbar = document.querySelector(".scrollbar");
 
-        // If window is wide enough, hide the scrollbar entirely
-        if (window.innerWidth >= 990) {
-            scrollbarWrapper.style.display = "none";
-            return;
-        } else {
-            scrollbarWrapper.style.display = "block";
-        }
+
 
         // Calculate bounding box of our booksGroup
         // to figure out how wide the books are in 3D space
         const box = new THREE.Box3().setFromObject(this.booksGroup);
-        const groupWidth = box.max.x - box.min.x;
-         const distance = this.bookInstances[3].scene.position.distanceTo(this.bookInstances[0].scene.position);
-        console.log({distance, groupWidth});
         const target = this.booksGroup
 
         Draggable.create("#scrollbar", {
@@ -201,6 +190,7 @@ export class Texture {
             inertia: true,
             onDrag: function () {
                 const scrollFraction = this.x / (scrollbarWrapper.offsetWidth - this.target.offsetWidth);
+                const groupWidth = box.max.x - box.min.x;
                 const scrollDistance = groupWidth * 0.75
                 const targetX = -scrollFraction * scrollDistance;
                 console.log({scrollFraction, scrollDistance, targetX});
@@ -875,6 +865,7 @@ export class Texture {
                 this.scrollTrigger.refresh();
                 this.updateBookPositions(this.scrollTrigger.progress);
             }
+
         });
     }
 
