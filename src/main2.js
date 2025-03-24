@@ -33,8 +33,6 @@ export class Texture {
         this.bookClosePromise = null;
         this.lastCalculatedPositions = [];
 
-        this.baseWidth = 1280;
-
 
         // 90% for full open, 10% for hover
         this.clickPlayPercentage = 0.9;
@@ -66,7 +64,7 @@ export class Texture {
         };
         this.aspectRatio = this.sizes.width / this.sizes.height;
 
-
+        this.baseWidth = 1280;
         // The factor should not exceed 1.0 (so if user gets a very large screen, the gap remains at intended “maximum”).
         this.bookSpacingScale = Math.min(1, Math.max(this.sizes.width / this.baseWidth, 0.6));
         console.log(this.bookSpacingScale);
@@ -401,12 +399,10 @@ export class Texture {
     }
 
     getXValue() {
-        const box = new THREE.Box3().setFromObject(this.booksGroup);
-
         if(window.innerWidth < this.baseWidth){
-            return  this.finalXValue = - box.min.x - Math.min(1, window.innerWidth / this.baseWidth) ;
+           return  this.finalXValue =  Math.min(1, this.sizes.width / this.baseWidth) - (Math.min(Math.max(window.innerWidth/1000,0.4), 0.55));
         }else{
-            return  this.finalXValue  = 0.35
+          return  this.finalXValue  = 0.35
         }
     }
 
@@ -474,8 +470,10 @@ export class Texture {
             const x = centerX + radiusX * Math.cos(angleX);
             const y = centerY + radiusY * Math.sin(angleY);
 
-            if (i === this.bookInstances.length - 1) {
-                this.camera.position.x = this.getXValue()
+            if (i === 3) {
+
+                this.getXValue()
+                this.camera.position.x = this.finalXValue
             }
 
             // If not open or actively clicking, let the ellipse drive the position
@@ -870,6 +868,7 @@ export class Texture {
 
         });
     }
+
 
     addClickListener() {
         this.renderer.domElement.addEventListener("click", (event) =>

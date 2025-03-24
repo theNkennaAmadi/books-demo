@@ -43,8 +43,8 @@ canvas {
 .scrollbar-wrapper{
     position: relative;
     bottom: -90vh;
-    width: min(10rem, 80vw);
-    height: 6px;
+    width: 80vw;
+    height: 12px;
     border: 1px solid black;
     z-index: 100;
      margin:0 auto;
