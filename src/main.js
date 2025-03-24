@@ -195,12 +195,13 @@ export class Texture {
             type: "x",
             bounds: document.querySelector('.scrollbar-wrapper'),
             inertia: true,
-            onDrag: function () {
+            onDrag: function() {
                 const scrollFraction = this.x / (scrollbarWrapper.offsetWidth - this.target.offsetWidth);
                 const groupWidth = box.max.x - box.min.x;
-                const scrollDistance = groupWidth * 0.75
+                const scrollDistance = groupWidth * 0.75;
                 const targetX = -scrollFraction * scrollDistance;
-                console.log({scrollFraction, scrollDistance, targetX});
+
+                // Update group position
                 target.position.x = targetX;
             }
         });
@@ -692,7 +693,7 @@ export class Texture {
                 book.scene.position,
                 {
                     duration: 2,
-                    x: ()=> this.getXValue() - this.booksGroup.position.x,
+                    x: ()=> this.getXValue(),
                     y: 0,
                     z: ()=> 0.55 * (Math.min(window.innerWidth/1000, 1)),
                 },
