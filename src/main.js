@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {Draggable} from "gsap/Draggable";
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 
 gsap.registerPlugin(ScrollTrigger, Draggable);
 
@@ -22,10 +23,10 @@ export class Texture {
         this.scene.add(this.booksGroup);
 
         this.books = [
-            { name: "The How", url: "/books/the-how-normal.glb" },
-            { name: "Bone", url: "/books/bone-normal.glb" },
-            { name: "The Terrible", url: "/books/the-terrible-normal.glb" },
-            { name: "The Catch", url: "/books/the-catch-normal.glb" },
+            { name: "The How", url: "/books/the-how-comp.glb" },
+            { name: "Bone", url: "/books/bone-comp.glb" },
+            { name: "The Terrible", url: "/books/the-terrible-comp.glb" },
+            { name: "The Catch", url: "/books/the-catch-comp.glb" },
         ];
 
         this.scrollTrigger = null;
@@ -83,7 +84,11 @@ export class Texture {
 
 
     loadBooks() {
+        this.dracoLoader = new DRACOLoader()
+        this.dracoLoader.setDecoderPath('/draco/')
+
         this.gltfLoader = new GLTFLoader();
+        this.gltfLoader.setDRACOLoader(this.dracoLoader)
         this.bookInstances = new Array(this.books.length).fill(null);
         let loadedCount = 0;
 
@@ -404,7 +409,7 @@ export class Texture {
         const box = new THREE.Box3().setFromObject(this.booksGroup);
 
         if(window.innerWidth < this.baseWidth){
-            return  this.finalXValue = - box.min.x - Math.min(1, window.innerWidth / this.baseWidth) ;
+            return  this.finalXValue =  Math.min(1, this.sizes.width / this.baseWidth) - (Math.min(Math.max(window.innerWidth/1000,0.4), 0.55));
         }else{
             return  this.finalXValue  = 0.35
         }
