@@ -17,6 +17,7 @@ export class Texture {
 
         this.bookInstances = [];
         this.clickableObjects = [];
+        this.targetX = 0
 
         // Create a group to hold all books
         this.booksGroup = new THREE.Group();
@@ -195,14 +196,12 @@ export class Texture {
             type: "x",
             bounds: document.querySelector('.scrollbar-wrapper'),
             inertia: true,
-            onDrag: function() {
+            onDrag: function () {
                 const scrollFraction = this.x / (scrollbarWrapper.offsetWidth - this.target.offsetWidth);
                 const groupWidth = box.max.x - box.min.x;
-                const scrollDistance = groupWidth * 0.75;
-                const targetX = -scrollFraction * scrollDistance;
-
-                // Update group position
-                target.position.x = targetX;
+                const scrollDistance = groupWidth * 0.75
+               this.targetX = -scrollFraction * scrollDistance;
+                target.position.x = this.targetX;
             }
         });
     }
@@ -419,7 +418,7 @@ export class Texture {
 
             const bookWidth = bbox.max.x - bbox.min.x;
             const desiredOffset = window.innerWidth/140 * bookWidth;
-            return  leftEdge + desiredOffset;
+            return this.finalXValue =  leftEdge + desiredOffset;
         }else{
             return  this.finalXValue  = 0.35
         }
@@ -656,6 +655,13 @@ export class Texture {
             return;
         }
 
+        const bbox = new THREE.Box3().setFromObject(book.scene);
+        const center = bbox.getCenter(new THREE.Vector3());
+
+// That center.x is how far “off” it is from world-space (0,0,0).
+// If you want the center to be exactly at x=0:
+        const offsetX = -center.x;
+
         // Cancel any hover in progress
         if (book.isHoverPlaying) {
             book.isHoverPlaying = false;
@@ -693,7 +699,16 @@ export class Texture {
                 book.scene.position,
                 {
                     duration: 2,
-                    x: ()=> this.getXValue(),
+                    x: () => {
+                        // The camera's x position represents the center point of the viewport
+                        const viewportCenter = this.camera.position.x;
+
+                        // We need to adjust for the current scrollbar position
+                        // this.targetX is how much the books group has been scrolled
+                        // We subtract it because if targetX is negative (scrolled right),
+                        // we need to move the book further right to appear centered
+                        return viewportCenter - this.booksGroup.position.x;
+                    },
                     y: 0,
                     z: ()=> 0.55 * (Math.min(window.innerWidth/1000, 1)),
                 },
