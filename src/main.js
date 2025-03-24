@@ -82,6 +82,35 @@ export class Texture {
 
     }
 
+    positionCameraForLeftmostBook() {
+        const leftmostBook = this.bookInstances[3];
+        if (!leftmostBook) return;
+
+        // Get bounding box of the leftmost book
+        const bbox = new THREE.Box3().setFromObject(leftmostBook.scene);
+
+        // The left edge in world space
+        const leftEdge = bbox.min.x;
+
+        // Example approach: set the camera so that leftEdge
+        // is near the left side of the view. How far you offset
+        // depends on how large your models are and how you want
+        // them framed. For instance, to center the leftmost book:
+        const bookWidth = bbox.max.x - bbox.min.x;
+        console.log(bookWidth);
+        const desiredOffset = window.innerWidth/160 * bookWidth; // or tweak as needed
+
+        //console.log(this.renderer.domElement.clientWidth);
+        // Shift the camera so the leftmost book is in view.
+        // If you want the leftmost book *centered*, you might do:
+        return leftEdge + desiredOffset;
+
+        // Or if you want the leftmost book exactly at the
+        // left edge of the viewport, you could do:
+        // this.camera.position.x = leftEdge + someExtraMargin;
+    }
+
+
 
     loadBooks() {
         this.dracoLoader = new DRACOLoader()
@@ -480,7 +509,13 @@ export class Texture {
             const y = centerY + radiusY * Math.sin(angleY);
 
             if (i === this.bookInstances.length - 1) {
-                this.camera.position.x = this.getXValue()
+              //  this.camera.position.x = this.getXValue()
+                //this.camera.position.x = this.positionCameraForLeftmostBook();
+                if(window.innerWidth < this.baseWidth){
+                    this.camera.position.x = this.positionCameraForLeftmostBook();
+                }else{
+                    this.camera.position.x = this.getXValue();
+                }
             }
 
             // If not open or actively clicking, let the ellipse drive the position
