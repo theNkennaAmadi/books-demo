@@ -24,7 +24,7 @@ export class Texture {
         this.scene.add(this.booksGroup);
 
         this.books = [
-            { name: "The How", url: "/books/the-how-comp.glb" },
+            { name: "The How", url: "/books/the-how-c1.glb" },
             { name: "Bone", url: "/books/bone-comp.glb" },
             { name: "The Terrible", url: "/books/the-terrible-comp.glb" },
             { name: "The Catch", url: "/books/the-catch-comp.glb" },
